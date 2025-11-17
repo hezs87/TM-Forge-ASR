@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API连接测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API连接测试</h1>
+        <form id="apiTestForm">
+            <div class="form-group">
+                <label for="levelId">关卡ID:</label>
+                <input type="number" id="levelId" value="1" min="1" max="10">
+            </div>
+            <div class="form-group">
+                <label for="message">消息内容:</label>
+                <textarea id="message" placeholder="请输入测试消息">你好，这是一个API连接测试。</textarea>
+            </div>
+            <button type="submit" id="submitBtn">测试后端接口</button>
+        </form>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        document.getElementById('apiTestForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            // 显示加载状态
+            submitBtn.disabled = true;
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = '正在测试API连接...';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const levelId = parseInt(document.getElementById('levelId').value, 10);
+                const message = document.getElementById('message').value;
+                
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8'
+                    },
+                    body: JSON.stringify({ levelId, message })
+                });
+                
+                console.log('响应状态:', response.status);
+                console.log('响应头:', response.headers);
+                
+                // 获取原始响应文本
+                const responseText = await response.text();
+                console.log('原始响应文本:', responseText);
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    throw new Error(`API请求失败，状态码: ${response.status}, 响应内容: ${responseText}`);
+                }
+                
+                // 尝试解析JSON
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (jsonError) {
+                    throw new Error(`API返回的不是有效的JSON格式: ${responseText.substring(0, 500)}`);
+                }
+                
+                // 显示成功结果
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <strong>接口调用成功！</strong><br>
+                    状态码: ${response.status}<br>
+                    响应内容:<br>
+                    <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                `;
+            } catch (error) {
+                // 显示错误信息
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <strong>接口调用失败！</strong><br>
+                    错误信息: ${error.message}
+                `;
+                
+                // 在控制台输出完整错误信息
+                console.error('API请求错误:', error);
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>千模炼阵 · AI 安全靶场 - 提示词注入攻防演练</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --accent-orange: #ff6b35;
+            --accent-blue: #0f3460;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --success: #4caf50;
+            --warning: #ff9800;
+            --error: #f44336;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-container {
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-orange) transparent;
+        }
+        
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background: var(--accent-orange);
+            border-radius: 3px;
+        }
+        
+        .message-bubble {
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: messageSlide 0.3s ease-out;
+        }
+        
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .user-message {
+            background: var(--accent-orange);
+            color: white;
+            margin-left: auto;
+        }
+        
+        .ai-message {
+            background: var(--accent-blue);
+            color: var(--text-primary);
+        }
+        
+        .typing-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-orange);
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-indicator:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-indicator:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+        
+        .level-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .level-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(255, 107, 53, 0.2);
+        }
+        
+        .level-card.locked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .level-card.completed {
+            border-color: var(--success);
+        }
+        
+        .level-card.active {
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, var(--accent-orange) 0%, var(--warning) 100%);
+            height: 4px;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        
+        .knowledge-panel {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .flag-display {
+            background: linear-gradient(45deg, var(--success), var(--warning));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            animation: flagGlow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes flagGlow {
+            from {
+                filter: brightness(1);
+            }
+            to {
+                filter: brightness(1.2);
+            }
+        }
+        
+        .security-alert {
+            border-left: 4px solid var(--error);
+            background: rgba(244, 67, 54, 0.1);
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+        }
+        
+        .success-alert {
+            border-left: 4px solid var(--success);
+            background: rgba(76, 175, 80, 0.1);
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+        }
+        
+        .hint-button {
+            background: var(--warning);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .hint-button:hover {
+            background: #e68900;
+            transform: scale(1.05);
+        }
+        
+        .hint-button:disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="glass-effect p-4 mb-6">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-shield-alt text-2xl" style="color: var(--accent-orange);"></i>
+                <h1 class="text-2xl font-bold">千模炼阵 · AI 安全靶场</h1>
+            </div>
+            <div class="flex items-center space-x-6">
+                <div class="text-sm">
+                    <span class="text-gray-400">进度：</span>
+                    <span id="overall-progress">0/10</span>
+                </div>
+                <div class="text-sm">
+                    <span class="text-gray-400">提示点数：</span>
+                    <span id="hint-points" class="font-bold" style="color: var(--accent-orange);">3</span>
+                </div>
+                <button onclick="showRules()" class="text-sm hover:text-orange-400 transition-colors">
+                    <i class="fas fa-info-circle mr-1"></i>规则
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 pb-20">
+        <!-- 关卡选择器 -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">选择挑战关卡</h2>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4" id="level-selector">
+                <!-- 关卡卡片将通过JavaScript动态生成 -->
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- 聊天区域 -->
+            <div class="lg:col-span-3">
+                <div class="glass-effect rounded-lg p-6">
+                    <!-- 关卡信息 -->
+                    <div class="mb-4 pb-4 border-b border-gray-600">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold" id="current-level-title">选择关卡开始挑战</h3>
+                            <div class="flex items-center space-x-4">
+                                <button id="hint-btn" class="hint-button" onclick="showHint()" disabled>
+                                    <i class="fas fa-lightbulb mr-1"></i>获取提示
+                                </button>
+                                <span class="text-sm text-gray-400" id="level-timer">00:00</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4 text-sm text-gray-400">
+                            <span id="ai-role">AI安全专家</span>
+                            <span>•</span>
+                            <span id="difficulty">难度：-</span>
+                            <span>•</span>
+                            <span id="attempts">尝试次数：0</span>
+                        </div>
+                    </div>
+
+                    <!-- 聊天消息区域 -->
+                    <div class="chat-container mb-4" id="chat-container">
+                        <div class="text-center text-gray-400 py-8">
+                            <i class="fas fa-comments text-4xl mb-4"></i>
+                            <p>选择一个关卡开始与AI安全专家的对话挑战</p>
+                        </div>
+                    </div>
+
+                    <!-- 输入区域 -->
+                    <div class="flex space-x-2">
+                        <textarea 
+                            id="message-input" 
+                            placeholder="输入你的消息..." 
+                            class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 resize-none focus:outline-none focus:border-orange-400"
+                            rows="2"
+                            disabled
+                        ></textarea>
+                        <button 
+                            id="send-btn" 
+                            class="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                            disabled
+                        >
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 知识面板 -->
+            <div class="lg:col-span-1">
+                <div class="glass-effect rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-book mr-2" style="color: var(--accent-orange);"></i>
+                        安全知识
+                    </h3>
+                    
+                    <!-- 当前关卡知识 -->
+                    <div class="knowledge-panel" id="knowledge-content">
+                        <div class="text-center text-gray-400 py-8">
+                            <i class="fas fa-graduation-cap text-3xl mb-3"></i>
+                            <p class="text-sm">选择关卡查看相关的安全知识</p>
+                        </div>
+                    </div>
+
+                    <!-- 成就系统 -->
+                    <div class="mt-6 pt-6 border-t border-gray-600">
+                        <h4 class="font-semibold mb-3 flex items-center">
+                            <i class="fas fa-trophy mr-2" style="color: var(--warning);"></i>
+                            成就
+                        </h4>
+                        <div id="achievements" class="space-y-2">
+                            <!-- 成就将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 已获得的Flags -->
+                    <div class="mt-6 pt-6 border-t border-gray-600">
+                        <h4 class="font-semibold mb-3 flex items-center">
+                            <i class="fas fa-flag mr-2" style="color: var(--success);"></i>
+                            已获得Flags
+                        </h4>
+                        <div id="collected-flags" class="space-y-2">
+                            <p class="text-sm text-gray-400">完成关卡获取flags</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规则模态框 -->
+    <div id="rules-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="glass-effect rounded-lg p-8 max-w-2xl mx-4 max-h-96 overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-6 flex items-center">
+                <i class="fas fa-info-circle mr-3" style="color: var(--accent-orange);"></i>
+                游戏规则
+            </h2>
+            
+            <div class="space-y-4 text-sm">
+                <div>
+                    <h3 class="font-semibold mb-2">🎯 游戏目标</h3>
+                    <p class="text-gray-300">通过与AI安全专家对话，使用各种提示词注入技术获取每关的flag。这是一个教育性的安全演练，旨在帮助理解AI安全漏洞。</p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-2">🔐 安全词机制</h3>
+                    <p class="text-gray-300">每关都有一个安全词，输入正确的安全词可以直接获得flag。安全词隐藏在关卡的教育内容中，需要仔细学习和探索才能发现。</p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-2">💡 提示系统</h3>
+                    <p class="text-gray-300">你可以使用提示点数获取关卡提示。提示点数通过完成关卡获得，使用提示会影响最终评分，但可以帮助你学习和理解攻击方法。</p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-2">🏆 成就系统</h3>
+                    <p class="text-gray-300">游戏包含隐藏式成就系统，完成特定挑战后自动解锁成就徽章。已解锁成就会显示详细信息，未解锁成就按类别隐藏，鼓励探索和技能专精！</p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-2">⚠️ 重要提醒</h3>
+                    <p class="text-gray-300">本游戏仅用于教育目的。在实际环境中进行类似攻击可能违反法律和道德规范。学习的目的是更好地保护系统，而不是造成伤害。</p>
+                </div>
+            </div>
+            
+            <button onclick="hideRules()" class="mt-6 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+                了解了
+            </button>
+        </div>
+    </div>
+
+    <!-- 成功模态框 -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="glass-effect rounded-lg p-8 max-w-lg mx-4 text-center">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-2xl font-bold mb-4" style="color: var(--success);">恭喜通关！</h2>
+            <div class="mb-4">
+                <p class="text-lg mb-2">你成功获得了flag：</p>
+                <div class="flag-display text-xl p-3 bg-gray-800 rounded" id="success-flag"></div>
+            </div>
+            <div class="mb-6" id="success-education">
+                <!-- 教育内容将通过JavaScript动态生成 -->
+            </div>
+            <div class="flex space-x-4 justify-center">
+                <button onclick="nextLevel()" class="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+                    下一关
+                </button>
+                <button onclick="hideSuccess()" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                    继续探索
+                </button>
+            </div>
+        </div>
+    </div>
+    
+
+
+    <script src="main.js"></script>
+    <script src="animations.js"></script>
+</body>
+</html>

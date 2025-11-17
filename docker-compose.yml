@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: .
+    container_name: ai-security-frontend
+    ports:
+      - "9009:80"
+    restart: unless-stopped
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+    depends_on:
+      - backend
+    volumes:
+      - ./logs:/var/log/nginx
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build: ./backend
+    container_name: ai-security-backend
+    restart: unless-stopped
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - ADMIN_SAFE_WORD=${ADMIN_SAFE_WORD}
+    expose:
+      - "8000"
